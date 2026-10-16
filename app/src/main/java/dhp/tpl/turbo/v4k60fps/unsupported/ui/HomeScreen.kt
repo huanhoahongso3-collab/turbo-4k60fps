@@ -17,11 +17,14 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Bolt
 import androidx.compose.material.icons.rounded.Close
@@ -34,6 +37,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LargeTopAppBar
@@ -46,6 +50,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.toShape
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -167,9 +172,25 @@ fun HomeScreen(store: Store, onPlay: (Uri) -> Unit, onOpenLab: () -> Unit) {
     }
 
     if (showEngine) {
-        ModalBottomSheet(onDismissRequest = { showEngine = false }) {
-            EngineSettings(config, onChange = { config = it; store.saveConfig(it) })
-            Spacer(Modifier.height(32.dp))
+        ModalBottomSheet(
+            onDismissRequest = { showEngine = false },
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        ) {
+            Row(
+                Modifier.padding(start = 24.dp, end = 8.dp, bottom = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("Decoder engine", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
+                FilledTonalIconButton(onClick = { showEngine = false }) { Icon(Icons.Rounded.Close, "Close") }
+            }
+            Column(
+                Modifier
+                    .verticalScroll(rememberScrollState())
+                    .navigationBarsPadding()
+                    .padding(bottom = 24.dp),
+            ) {
+                EngineSettings(config, onChange = { config = it; store.saveConfig(it) }, showTitle = false)
+            }
         }
     }
 }
