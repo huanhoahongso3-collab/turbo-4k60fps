@@ -53,14 +53,19 @@ fun TurboTheme(content: @Composable () -> Unit) {
 
 /** Engine switches, shared by the home screen and the in-player sheet. */
 @Composable
-fun EngineSettings(config: EngineConfig, onChange: (EngineConfig) -> Unit, modifier: Modifier = Modifier) {
+fun EngineSettings(
+    config: EngineConfig,
+    onChange: (EngineConfig) -> Unit,
+    modifier: Modifier = Modifier,
+    showTitle: Boolean = true,
+) {
     val context = LocalContext.current
     val sustainedSupported = remember {
         context.getSystemService(PowerManager::class.java)?.isSustainedPerformanceModeSupported == true
     }
     Column(modifier.fillMaxWidth()) {
         Column(Modifier.padding(horizontal = 24.dp)) {
-            Text("Decoder engine", style = MaterialTheme.typography.headlineSmall)
+            if (showTitle) Text("Decoder engine", style = MaterialTheme.typography.headlineSmall)
             Text(
                 "How hard Turbo4K pushes your phone's hardware decoder.",
                 style = MaterialTheme.typography.bodyMedium,

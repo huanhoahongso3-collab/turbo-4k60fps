@@ -7,11 +7,15 @@ import android.content.pm.ActivityInfo
 import android.media.AudioManager
 import android.provider.Settings
 import android.view.SurfaceView
+import android.content.res.Configuration
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.LocalActivity
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -27,6 +31,9 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -46,6 +53,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.AspectRatio
 import androidx.compose.material.icons.rounded.Bolt
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Replay
 import androidx.compose.material.icons.rounded.Forward10
 import androidx.compose.material.icons.rounded.Insights
 import androidx.compose.material.icons.rounded.Pause
@@ -73,6 +82,7 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -93,6 +103,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
@@ -147,6 +158,11 @@ fun PlayerScreen(
     var hud by remember { mutableStateOf<String?>(null) }
     var hudVersion by remember { mutableLongStateOf(0L) }
     var interaction by remember { mutableLongStateOf(0L) }
+    val landscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+    // Keeps the panel's content while it animates out after sheet becomes NONE.
+    var shownSheet by remember { mutableStateOf(Sheet.ENGINE) }
+    if (sheet != Sheet.NONE) shownSheet = sheet
+    BackHandler(enabled = sheet != Sheet.NONE) { sheet = Sheet.NONE }
 
     fun showHud(text: String) {
         hud = text
@@ -429,24 +445,99 @@ fun PlayerScreen(
                     .size(72.dp),
             )
         }
+
+        // Landscape: a side panel. A bottom sheet taller than the screen fights its own
+        // scrolling and can get stuck fully open.
+        AnimatedVisibility(
+            visible = landscape && sheet != Sheet.NONE,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier.fillMaxSize(),
+        ) {
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.45f))
+                    .pointerInput(Unit) { detectTapGestures { sheet = Sheet.NONE } },
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(topStart = 32.dp, bottomStart = 32.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainerLow,
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .fillMaxHeight()
+                        .width(420.dp)
+                        .animateEnterExit(
+                            enter = slideInHorizontally(MaterialTheme.motionScheme.defaultSpatialSpec()) { it },
+                            exit = slideOutHorizontally(MaterialTheme.motionScheme.fastSpatialSpec()) { it },
+                        )
+                        // Swallow taps so they don't reach the scrim behind the panel.
+                        .pointerInput(Unit) { detectTapGestures { } },
+                ) {
+                    Column(
+                        Modifier.windowInsetsPadding(
+                            WindowInsets.safeDrawing.only(WindowInsetsSides.Vertical + WindowInsetsSides.End),
+                        ),
+                    ) {
+                        PanelHeader(shownSheet) { sheet = Sheet.NONE }
+                        Column(
+                            Modifier
+                                .weight(1f)
+                                .verticalScroll(rememberScrollState())
+                                .padding(bottom = 24.dp),
+                        ) {
+                            SheetContent(shownSheet, turbo, onPickSubtitle = { sheet = Sheet.NONE; onPickSubtitle() })
+                        }
+                    }
+                }
+            }
+        }
     }
 
-    if (sheet != Sheet.NONE) {
-        ModalBottomSheet(onDismissRequest = { sheet = Sheet.NONE }) {
+    // Portrait: a bottom sheet that opens fully, with its own close button.
+    if (!landscape && sheet != Sheet.NONE) {
+        ModalBottomSheet(
+            onDismissRequest = { sheet = Sheet.NONE },
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        ) {
+            PanelHeader(sheet) { sheet = Sheet.NONE }
             Column(
                 Modifier
                     .verticalScroll(rememberScrollState())
                     .navigationBarsPadding()
                     .padding(bottom = 24.dp),
             ) {
-                when (sheet) {
-                    Sheet.TRACKS -> TracksSheet(turbo, onPickSubtitle = { sheet = Sheet.NONE; onPickSubtitle() })
-                    Sheet.SPEED -> SpeedSheet(turbo.speed, turbo::setPlaybackSpeed)
-                    Sheet.ENGINE -> EngineSettings(turbo.config, onChange = turbo::applyConfig)
-                    Sheet.NONE -> Unit
-                }
+                SheetContent(sheet, turbo, onPickSubtitle = { sheet = Sheet.NONE; onPickSubtitle() })
             }
         }
+    }
+}
+
+private fun Sheet.title(): String = when (this) {
+    Sheet.TRACKS -> "Audio & subtitles"
+    Sheet.SPEED -> "Playback speed"
+    Sheet.ENGINE -> "Decoder engine"
+    Sheet.NONE -> ""
+}
+
+@Composable
+private fun PanelHeader(sheet: Sheet, onClose: () -> Unit) {
+    Row(
+        Modifier.padding(start = 24.dp, end = 8.dp, top = 8.dp, bottom = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(sheet.title(), style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
+        FilledTonalIconButton(onClick = onClose) { Icon(Icons.Rounded.Close, "Close") }
+    }
+}
+
+@Composable
+private fun SheetContent(sheet: Sheet, turbo: TurboPlayer, onPickSubtitle: () -> Unit) {
+    when (sheet) {
+        Sheet.TRACKS -> TracksSheet(turbo, onPickSubtitle)
+        Sheet.SPEED -> SpeedSheet(turbo.speed, turbo::setPlaybackSpeed)
+        Sheet.ENGINE -> EngineSettings(turbo.config, onChange = turbo::applyConfig, showTitle = false)
+        Sheet.NONE -> Unit
     }
 }
 
@@ -608,8 +699,16 @@ private fun PlayButton(turbo: TurboPlayer) {
             LoadingIndicator(Modifier.size(56.dp), color = MaterialTheme.colorScheme.onPrimaryContainer)
         } else {
             Icon(
-                if (turbo.playWhenReady) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-                if (turbo.playWhenReady) "Pause" else "Play",
+                when {
+                    turbo.isEnded -> Icons.Rounded.Replay
+                    turbo.playWhenReady -> Icons.Rounded.Pause
+                    else -> Icons.Rounded.PlayArrow
+                },
+                when {
+                    turbo.isEnded -> "Replay"
+                    turbo.playWhenReady -> "Pause"
+                    else -> "Play"
+                },
                 tint = MaterialTheme.colorScheme.onPrimaryContainer,
                 modifier = Modifier.size(44.dp),
             )
@@ -669,7 +768,13 @@ private fun StatsPanel(stats: PlaybackStats) {
 private fun MessageCard(text: String, color: Color, action: String?, onAction: (() -> Unit)?) {
     Surface(shape = RoundedCornerShape(20.dp), color = color) {
         Row(Modifier.padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(text, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f, fill = false))
+            Text(
+                text,
+                style = MaterialTheme.typography.bodyMedium,
+                maxLines = 4,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false),
+            )
             if (action != null && onAction != null) {
                 TextButton(onClick = onAction) { Text(action) }
             }
@@ -721,7 +826,6 @@ private fun TrackRow(label: String, selected: Boolean, onClick: () -> Unit) {
 
 @Composable
 private fun SpeedSheet(speed: Float, onSpeed: (Float) -> Unit) {
-    SheetTitle("Playback speed")
     Text(
         "%.2f×".format(speed),
         style = MaterialTheme.typography.displaySmall,

@@ -72,6 +72,8 @@ class TurboPlayer(private val context: Context, private val store: Store) {
         private set
     var isBuffering by mutableStateOf(false)
         private set
+    var isEnded by mutableStateOf(false)
+        private set
     var videoSize by mutableStateOf(VideoSize.UNKNOWN)
         private set
     var cues by mutableStateOf<List<Cue>>(emptyList())
@@ -255,7 +257,8 @@ class TurboPlayer(private val context: Context, private val store: Store) {
             notice = "Decoder refused \"${config.summary()}\". Retrying with \"${next.summary()}\"."
             main.post { open(uri, position, true, next) }
         } else {
-            error = "${e.errorCodeName}: ${e.cause?.message ?: e.message}"
+            val reason = (e.cause?.message ?: e.message ?: "").substringBefore(", Format(").take(160)
+            error = "${e.errorCodeName.removePrefix("ERROR_CODE_")}: $reason"
         }
     }
 
@@ -270,6 +273,7 @@ class TurboPlayer(private val context: Context, private val store: Store) {
 
         override fun onPlaybackStateChanged(playbackState: Int) {
             isBuffering = playbackState == Player.STATE_BUFFERING
+            isEnded = playbackState == Player.STATE_ENDED
         }
 
         override fun onVideoSizeChanged(videoSize: VideoSize) {
