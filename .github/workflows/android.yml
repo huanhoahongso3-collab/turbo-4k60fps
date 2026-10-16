@@ -1,0 +1,47 @@
+name: Build APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: 9.8.1
+
+      - name: Build release APK
+        run: gradle assembleRelease --stacktrace
+
+      - name: Rename APK
+        run: cp app/build/outputs/apk/release/app-release.apk Turbo4K.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Turbo4K
+          path: Turbo4K.apk
+
+      # A moving "latest" release so the APK can be downloaded straight from the phone.
+      - name: Publish latest release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete latest --yes --cleanup-tag || true
+          gh release create latest Turbo4K.apk \
+            --title "Turbo4K build ${{ github.run_number }}" \
+            --notes "Built from ${{ github.sha }}" \
+            --target ${{ github.sha }} \
+            --prerelease
