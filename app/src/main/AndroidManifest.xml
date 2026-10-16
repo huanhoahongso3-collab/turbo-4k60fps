@@ -24,7 +24,14 @@
             android:launchMode="singleTask"
             android:resizeableActivity="true"
             android:theme="@style/Theme.Turbo4K.Player">
-            <intent-filter>
+            <!-- Share sheet: the label shows under the app name so it's clear this plays the video. -->
+            <intent-filter android:label="Play video">
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="video/*" />
+            </intent-filter>
+
+            <intent-filter android:label="Play video">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />

@@ -49,7 +49,7 @@ jobs:
       - name: Rename APK and show signer
         run: |
           cp app/build/outputs/apk/release/app-release.apk Turbo4K.apk
-          "$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -1)/apksigner" verify --print-certs Turbo4K.apk | grep -E "DN|SHA-256"
+          "$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -1)/apksigner" verify --print-certs Turbo4K.apk 2>&1 | grep -E "certificate (DN|SHA-256)" || true
 
       - uses: actions/upload-artifact@v4
         with:

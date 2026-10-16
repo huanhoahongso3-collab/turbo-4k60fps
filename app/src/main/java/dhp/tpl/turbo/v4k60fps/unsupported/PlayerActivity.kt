@@ -3,6 +3,7 @@ package dhp.tpl.turbo.v4k60fps.unsupported
 import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.content.res.Configuration
+import android.net.Uri
 import android.os.Bundle
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
@@ -12,6 +13,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.core.content.IntentCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -66,7 +68,7 @@ class PlayerActivity : ComponentActivity() {
     }
 
     private fun handleIntent(intent: Intent) {
-        val uri = intent.data ?: run { finish(); return }
+        val uri = videoUri(intent) ?: run { finish(); return }
         val key = uri.toString()
         title = displayName(this, uri)
         val previous = store.recent(key)
@@ -81,6 +83,13 @@ class PlayerActivity : ComponentActivity() {
             ),
         )
         turbo.open(uri, resumeAt)
+    }
+
+    /** "Open with" puts the video in data; "Share" puts it in EXTRA_STREAM (or ClipData). */
+    private fun videoUri(intent: Intent): Uri? {
+        if (intent.action != Intent.ACTION_SEND) return intent.data
+        return IntentCompat.getParcelableExtra(intent, Intent.EXTRA_STREAM, Uri::class.java)
+            ?: intent.clipData?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.uri
     }
 
     private fun toggleRotationLock() {
