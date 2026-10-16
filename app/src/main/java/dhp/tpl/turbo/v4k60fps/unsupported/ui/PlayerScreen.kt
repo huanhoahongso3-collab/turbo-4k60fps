@@ -580,7 +580,7 @@ private fun Controls(
 
 @Composable
 private fun PlayButton(turbo: TurboPlayer) {
-    val shape = remember { MaterialShapes.Cookie9Sided.toShape() }
+    val shape = MaterialShapes.Cookie9Sided.toShape()
     val rotation by animateFloatAsState(
         targetValue = if (turbo.playWhenReady) 0f else 40f,
         animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),

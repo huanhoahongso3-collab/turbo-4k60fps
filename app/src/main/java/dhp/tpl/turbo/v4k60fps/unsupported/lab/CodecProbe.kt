@@ -32,7 +32,7 @@ object CodecProbe {
             .sortedWith(compareBy({ !it.hardware }, { videoMimes.indexOf(it.mime.lowercase()) }))
 
     private fun describe(info: MediaCodecInfo, mime: String): DecoderReport {
-        val video = info.getCapabilitiesForType(mime).videoCapabilities
+        val video = info.getCapabilitiesForType(mime).videoCapabilities!!
         val sizeOk = video.isSizeSupported(3840, 2160)
         val limit = if (sizeOk) {
             "up to %.0f fps".format(video.getSupportedFrameRatesFor(3840, 2160).upper)
