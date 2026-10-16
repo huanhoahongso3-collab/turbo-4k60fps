@@ -11,6 +11,11 @@ enum class RateMode(val label: String, val detail: String) {
 data class EngineConfig(
     /** Drop Android's software decoders (c2.android.*, OMX.google.*) for video. */
     val hardwareOnly: Boolean = true,
+    /**
+     * Start the decoder the way mpv does (no frame rate, rate or priority), so Qualcomm's
+     * capacity check at startup doesn't reject 4K60, then ask for the clock once it runs.
+     */
+    val stealthStart: Boolean = true,
     /** Report 4K60 as playable even when the codec's advertised limits say otherwise. */
     val ignoreCapabilityCheck: Boolean = true,
     val rateMode: RateMode = RateMode.MAX,
@@ -25,6 +30,7 @@ data class EngineConfig(
 ) {
     /** The next, safer config to try after the decoder refused this one; null when nothing is left. */
     fun fallback(): EngineConfig? = when {
+        !stealthStart -> copy(stealthStart = true)
         lowLatency -> copy(lowLatency = false)
         rateMode == RateMode.MAX -> copy(rateMode = RateMode.BOOST)
         rateMode == RateMode.BOOST -> copy(rateMode = RateMode.MATCH)
@@ -37,6 +43,7 @@ data class EngineConfig(
     fun summary(): String = buildList {
         add(if (hardwareOnly) "HW only" else "HW + SW")
         add("${rateMode.label} clock")
+        if (stealthStart) add("mpv-style start")
         if (ignoreCapabilityCheck) add("limits ignored")
         if (lowLatency) add("low latency")
     }.joinToString(" · ")

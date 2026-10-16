@@ -23,6 +23,7 @@ class Store(context: Context) {
 
     fun loadConfig(): EngineConfig = EngineConfig(
         hardwareOnly = prefs.getBoolean("hardwareOnly", true),
+        stealthStart = prefs.getBoolean("stealthStart", true),
         ignoreCapabilityCheck = prefs.getBoolean("ignoreCaps", true),
         rateMode = RateMode.entries.firstOrNull { it.name == prefs.getString("rateMode", null) }
             ?: RateMode.MAX,
@@ -34,6 +35,7 @@ class Store(context: Context) {
 
     fun saveConfig(config: EngineConfig) = prefs.edit {
         putBoolean("hardwareOnly", config.hardwareOnly)
+        putBoolean("stealthStart", config.stealthStart)
         putBoolean("ignoreCaps", config.ignoreCapabilityCheck)
         putString("rateMode", config.rateMode.name)
         putBoolean("realtimePriority", config.realtimePriority)

@@ -55,12 +55,14 @@ object DecodeBenchmark {
             val name = CodecProbe.hardwareDecoderFor(mime)
                 ?: return@withContext BenchResult(mode, error = "No hardware decoder for $mime")
 
-            format.setInteger(MediaFormat.KEY_PRIORITY, 0)
-            when (mode) {
-                RateMode.MAX -> format.setFloat(MediaFormat.KEY_OPERATING_RATE, Short.MAX_VALUE.toFloat())
-                RateMode.BOOST -> format.setFloat(MediaFormat.KEY_OPERATING_RATE, videoFps * 2)
-                RateMode.MATCH -> format.setFloat(MediaFormat.KEY_OPERATING_RATE, videoFps)
-                RateMode.OFF -> format.removeKey(MediaFormat.KEY_OPERATING_RATE)
+            // mpv-style start: hide the fps so the capacity check lets 4K60 start,
+            // then ask for the clock once the decoder runs (same as the player).
+            format.removeKey(MediaFormat.KEY_FRAME_RATE)
+            val rate = when (mode) {
+                RateMode.MAX -> Short.MAX_VALUE.toFloat()
+                RateMode.BOOST -> videoFps * 2
+                RateMode.MATCH -> videoFps
+                RateMode.OFF -> -1f
             }
 
             reader = ImageReader.newInstance(
@@ -71,6 +73,14 @@ object DecodeBenchmark {
             try {
                 decoder.configure(format, reader.surface, null, 0)
                 decoder.start()
+                if (rate > 0) {
+                    runCatching {
+                        decoder.setParameters(android.os.Bundle().apply {
+                            putFloat(MediaFormat.KEY_OPERATING_RATE, rate)
+                            putInt(MediaFormat.KEY_PRIORITY, 0)
+                        })
+                    }
+                }
             } catch (e: Exception) {
                 return@withContext BenchResult(
                     mode, decoder = name, resolution = "${width}×$height", videoFps = videoFps,

@@ -92,6 +92,11 @@ fun EngineSettings(config: EngineConfig, onChange: (EngineConfig) -> Unit, modif
             config.hardwareOnly,
         ) { onChange(config.copy(hardwareOnly = it)) }
         SettingSwitch(
+            "mpv-style start",
+            "Start the decoder without the real fps so Qualcomm's 4K60 capacity check lets it start, then ask for the clock",
+            config.stealthStart,
+        ) { onChange(config.copy(stealthStart = it)) }
+        SettingSwitch(
             "Ignore advertised limits",
             "Play 4K60 even when the phone says its decoder tops out at 4K30",
             config.ignoreCapabilityCheck,

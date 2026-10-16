@@ -5,6 +5,7 @@ import android.media.MediaCodecInfo.CodecCapabilities
 import android.media.MediaCrypto
 import android.media.MediaFormat
 import android.os.Build
+import android.os.Bundle
 import android.os.Handler
 import androidx.media3.common.C
 import androidx.media3.common.Format
@@ -60,6 +61,9 @@ class TurboVideoRenderer(
     private val onConfigured: (String) -> Unit,
 ) : MediaCodecVideoRenderer(builder) {
 
+    /** Operating rate to request after the codec has started (mpv-style start). */
+    private var deferredRate = -1f
+
     override fun supportsFormat(mediaCodecSelector: MediaCodecSelector, format: Format): Int {
         val capabilities = super.supportsFormat(mediaCodecSelector, format)
         val support = RendererCapabilities.getFormatSupport(capabilities)
@@ -94,8 +98,18 @@ class TurboVideoRenderer(
             super.getMediaCodecConfiguration(codecInfo, format, crypto, codecOperatingRate)
         val mediaFormat = configuration.mediaFormat
 
-        if (!config.realtimePriority) mediaFormat.removeKey(MediaFormat.KEY_PRIORITY)
-        if (config.rateMode == RateMode.OFF) mediaFormat.removeKey(MediaFormat.KEY_OPERATING_RATE)
+        if (config.stealthStart) {
+            // Qualcomm admits a decoder session by fps x resolution. Without these keys it
+            // assumes an ordinary clip and lets 4K60 start, like mpv.
+            deferredRate = if (config.rateMode == RateMode.OFF) -1f else codecOperatingRate
+            mediaFormat.removeKey(MediaFormat.KEY_FRAME_RATE)
+            mediaFormat.removeKey(MediaFormat.KEY_OPERATING_RATE)
+            mediaFormat.removeKey(MediaFormat.KEY_PRIORITY)
+        } else {
+            deferredRate = -1f
+            if (!config.realtimePriority) mediaFormat.removeKey(MediaFormat.KEY_PRIORITY)
+            if (config.rateMode == RateMode.OFF) mediaFormat.removeKey(MediaFormat.KEY_OPERATING_RATE)
+        }
         if (config.lowLatency) {
             if (Build.VERSION.SDK_INT >= 30 &&
                 codecInfo.capabilities?.isFeatureSupported(CodecCapabilities.FEATURE_LowLatency) == true
@@ -107,6 +121,33 @@ class TurboVideoRenderer(
 
         onConfigured(describe(mediaFormat))
         return configuration
+    }
+
+    override fun onCodecInitialized(
+        name: String,
+        configuration: MediaCodecAdapter.Configuration,
+        initializedTimestampMs: Long,
+        initializationDurationMs: Long,
+    ) {
+        super.onCodecInitialized(name, configuration, initializedTimestampMs, initializationDurationMs)
+        if (!config.stealthStart) return
+        val adapter = codec ?: return
+        val applied = mutableListOf<String>()
+        if (deferredRate > 0) {
+            runCatching {
+                adapter.setParameters(Bundle().apply { putFloat(MediaFormat.KEY_OPERATING_RATE, deferredRate) })
+                applied += "rate=%.0f".format(deferredRate)
+            }
+        }
+        if (config.realtimePriority) {
+            runCatching {
+                adapter.setParameters(Bundle().apply { putInt(MediaFormat.KEY_PRIORITY, 0) })
+                applied += "prio=realtime"
+            }
+        }
+        onConfigured(
+            "mpv-style start · after start: " + applied.ifEmpty { listOf("nothing") }.joinToString(" · "),
+        )
     }
 
     private fun describe(mediaFormat: MediaFormat): String {
