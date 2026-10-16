@@ -17,7 +17,9 @@ android {
         versionName = "1.0.$buildNumber"
     }
 
-    // A fixed key committed to the repo, so every CI build installs over the previous one.
+    // CI signs with the owner's release key (from repo secrets). Builds without those secrets,
+    // e.g. forks or local builds, fall back to the throwaway key committed here.
+    val releaseKeystore = System.getenv("SIGNING_KEYSTORE_PATH")?.let(::file)?.takeIf { it.exists() }
     signingConfigs {
         getByName("debug") {
             storeFile = file("debug.keystore")
@@ -25,12 +27,20 @@ android {
             keyAlias = "androiddebugkey"
             keyPassword = "android"
         }
+        if (releaseKeystore != null) {
+            create("release") {
+                storeFile = releaseKeystore
+                storePassword = System.getenv("SIGNING_STORE_PASSWORD")
+                keyAlias = System.getenv("SIGNING_KEY_ALIAS")
+                keyPassword = System.getenv("SIGNING_KEY_PASSWORD")
+            }
+        }
     }
 
     buildTypes {
         release {
             isMinifyEnabled = false
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
         }
     }
 

@@ -3,10 +3,15 @@ name: Build APK
 on:
   push:
     branches: [main]
+    tags: ["v*"]
   workflow_dispatch:
 
 permissions:
   contents: write
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   build:
@@ -23,25 +28,54 @@ jobs:
         with:
           gradle-version: 9.8.1
 
+      - name: Restore signing key
+        env:
+          KEYSTORE_BASE64: ${{ secrets.SIGNING_KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
+            echo "SIGNING_KEYSTORE_PATH=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+          else
+            echo "No signing secret: building with the throwaway debug key."
+          fi
+
       - name: Build release APK
+        env:
+          SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
+          SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
+          SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
         run: gradle assembleRelease --stacktrace
 
-      - name: Rename APK
-        run: cp app/build/outputs/apk/release/app-release.apk Turbo4K.apk
+      - name: Rename APK and show signer
+        run: |
+          cp app/build/outputs/apk/release/app-release.apk Turbo4K.apk
+          "$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -1)/apksigner" verify --print-certs Turbo4K.apk | grep -E "DN|SHA-256"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: Turbo4K
+          name: Turbo4K-${{ github.run_number }}
           path: Turbo4K.apk
 
-      # A moving "latest" release so the APK can be downloaded straight from the phone.
-      - name: Publish latest release
+      # Every push to main replaces the "dev" pre-release with the newest build.
+      - name: Publish dev build
+        if: github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release delete latest --yes --cleanup-tag || true
-          gh release create latest Turbo4K.apk \
-            --title "Turbo4K build ${{ github.run_number }}" \
-            --notes "Built from ${{ github.sha }}" \
+          gh release delete dev --yes --cleanup-tag || true
+          gh release create dev Turbo4K.apk \
+            --title "Dev build ${{ github.run_number }}" \
+            --notes "Latest development build from ${{ github.sha }}. May be unstable." \
             --target ${{ github.sha }} \
             --prerelease
+
+      # Pushing a tag like v1.0 publishes a proper release.
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ github.ref_name }}" Turbo4K.apk \
+            --title "Turbo4K ${{ github.ref_name }}" \
+            --generate-notes \
+            --verify-tag

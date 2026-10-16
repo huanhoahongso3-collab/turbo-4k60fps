@@ -7,7 +7,7 @@ if exist "%OUT%" rmdir /s /q "%OUT%"
 mkdir "%OUT%"
 
 echo Downloading the latest Turbo4K build...
-gh release download latest --pattern Turbo4K.apk --dir "%OUT%" || goto :fail
+gh release download dev --pattern Turbo4K.apk --dir "%OUT%" || goto :fail
 
 echo Installing on the phone...
 adb install -r "%OUT%\Turbo4K.apk" || goto :fail
