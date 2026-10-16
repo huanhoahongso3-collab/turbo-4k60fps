@@ -349,7 +349,10 @@ class TurboPlayer(private val context: Context, private val store: Store) {
         val mime = format.sampleMimeType ?: return
         val result = runCatching {
             val info = MediaCodecList(MediaCodecList.ALL_CODECS).codecInfos.first { it.name == decoder }
-            val video = info.getCapabilitiesForType(mime).videoCapabilities!!
+            // Dolby Vision profile 8 plays on the plain HEVC decoder, which has no DV caps entry.
+            val type = info.supportedTypes.firstOrNull { it.equals(mime, ignoreCase = true) }
+                ?: info.supportedTypes.first { it.startsWith("video/") }
+            val video = info.getCapabilitiesForType(type).videoCapabilities!!
             val fps = format.frameRate.takeIf { it > 0 }?.toDouble() ?: 30.0
             val ok = video.areSizeAndRateSupported(format.width, format.height, fps)
             val measured = runCatching { video.getAchievableFrameRatesFor(format.width, format.height) }
